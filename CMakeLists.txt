@@ -38,8 +38,6 @@ find_package(PythonInterp REQUIRED)
 find_package(Torch REQUIRED)
 find_package(TorchVision REQUIRED)
 
-find_package(teaserpp REQUIRED)
-
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 
@@ -66,7 +64,6 @@ target_include_directories(graph_matcher_lib PUBLIC
     ${TorchVIsion_INCLUDE_DIRS}
 )
 target_link_libraries(graph_matcher_lib PUBLIC
-                    teaserpp::teaser_registration 
                     -Wl,--no-as-needed                    
                     TorchVision::TorchVision
 		    -Wl,--as-needed
@@ -167,8 +164,6 @@ target_link_libraries(matcher
     OpenMP::OpenMP_CXX
     graph_matcher_lib
     logger_lib
-    teaserpp::teaser_registration 
-    teaserpp::teaser_features
     -Wl,--no-as-needed                    
     TorchVision::TorchVision
 )
@@ -218,34 +213,6 @@ target_link_libraries(test_features
     graph_matcher_lib
 )
 
-# mytest
-add_executable(mls_smooth src/mls_smooth.cpp) 
-target_include_directories(mls_smooth PUBLIC   
-    ${EIGEN3_INCLUDE_DIRS} 
-    ${PCL_COMMON_INCLUDE_DIR} 
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>   
-    $<INSTALL_INTERFACE:include>
-    )
-target_compile_features(mls_smooth PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17 
-target_link_libraries(mls_smooth ${PCL_LIBRARIES})
-
-
-add_executable(reset_altimeter src/reset_altimeter.cpp) 
-target_include_directories(reset_altimeter PUBLIC   
-    ${EIGEN3_INCLUDE_DIRS} 
-    ${PCL_COMMON_INCLUDE_DIR} 
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>   
-    $<INSTALL_INTERFACE:include>
-    )
-target_compile_features(reset_altimeter PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17 
-target_link_libraries(reset_altimeter ${PCL_LIBRARIES})
-
-install(TARGETS reset_altimeter   
-        EXPORT export_reset_altimeter
-        ARCHIVE DESTINATION lib   
-        LIBRARY DESTINATION lib   
-        RUNTIME DESTINATION bin 
-       )
 
 install(TARGETS
        	pts2pcd 
@@ -291,17 +258,3 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-
-# if(BUILD_TESTING)
-#   find_package(ament_lint_auto REQUIRED)
-#   # the following line skips the linter which checks for copyrights
-#   # comment the line when a copyright and license is added to all source files
-#   set(ament_cmake_copyright_FOUND TRUE)
-#   # the following line skips cpplint (only works in a git repo)
-#   # comment the line when this package is in a git repo and when
-#   # a copyright and license is added to all source files
-#   set(ament_cmake_cpplint_FOUND TRUE)
-#   ament_lint_auto_find_test_dependencies()
-# endif()
-
-# ament_package()

@@ -10,11 +10,6 @@
 
 #include<boomer2_tools/Descriptor.hh>
 
-
-#include <teaser/ply_io.h>
-#include <teaser/registration.h>
-#include <teaser/matcher.h>
-
 #include <omp.h>
 
 using namespace graph_matcher;
@@ -623,143 +618,108 @@ std::vector<std::pair<int,int> > GraphBuilder::matchGraphs(FeatureGraphPtr &from
   }
 
   fromTo = Eigen::Affine3d::Identity();
-  if(options.use_RANSAC)
-  {
-  //RANSAC
-    double score = INT_MIN;
-    if (options.random_seed)
-      std::srand(static_cast<unsigned int>(std::time(nullptr))); //set random seed 
-    else  
-      std::srand(options.seed); //set seed 
+ 
+  double score = INT_MIN;
+  if (options.random_seed)
+    std::srand(static_cast<unsigned int>(std::time(nullptr))); //set random seed 
+  else  
+    std::srand(options.seed); //set seed 
 
-    Eigen::Affine3d T;
-    //This is actually 2*number of possible combinations
-    int max_combos = forward.size()*(forward.size()-1)*(forward.size()-2)/3;
-    max_combos = max_combos < options.max_iterations ? max_combos : options.max_iterations;
-    std::cerr<<"max combinations = "<<max_combos<<std::endl;
+  Eigen::Affine3d T;
+  //This is actually 2*number of possible combinations
+  int max_combos = forward.size()*(forward.size()-1)*(forward.size()-2)/3;
+  max_combos = max_combos < options.max_iterations ? max_combos : options.max_iterations;
+  std::cerr<<"max combinations = "<<max_combos<<std::endl;
 
-    for(int i=0; i<max_combos; i++) {
-      std::vector<Eigen::Vector3d> fromV, toV;
-      /*
-      for(int q=0; q<3; q++) {
-        int idx = forward.size()*((double)std::rand()/RAND_MAX);
-        //std::cerr<<"idx "<<idx<<" out of "<<forward.size()<<std::endl;
+  for(int i=0; i<max_combos; i++) {
+    std::vector<Eigen::Vector3d> fromV, toV;
+    /*
+    for(int q=0; q<3; q++) {
+      int idx = forward.size()*((double)std::rand()/RAND_MAX);
+      //std::cerr<<"idx "<<idx<<" out of "<<forward.size()<<std::endl;
+      fromV.push_back(forward[idx].first->pos);
+      toV.push_back(forward[idx].second->pos);
+    }
+    */
+    while(fromV.size()<3) {
+      int idx = forward.size()*((double)std::rand()/RAND_MAX);
+      bool insert=true;
+      //check we haven't chosen a close-by point already
+      for(int q=0; q<fromV.size(); q++) {
+        insert = insert && ((forward[idx].first->pos-fromV[q]).norm()>0.1);
+      }
+      if(insert) {
         fromV.push_back(forward[idx].first->pos);
         toV.push_back(forward[idx].second->pos);
       }
-      */
-      while(fromV.size()<3) {
-        int idx = forward.size()*((double)std::rand()/RAND_MAX);
-        bool insert=true;
-        //check we haven't chosen a close-by point already
+      /* 
+      else {
+        std::cerr<<"jump point! "<<idx<<" = "<<forward[idx].first->pos.transpose()<<"\n already in are:\n";
         for(int q=0; q<fromV.size(); q++) {
-          insert = insert && ((forward[idx].first->pos-fromV[q]).norm()>0.1);
-        }
-        if(insert) {
-          fromV.push_back(forward[idx].first->pos);
-          toV.push_back(forward[idx].second->pos);
-        }
-        /* 
-        else {
-          std::cerr<<"jump point! "<<idx<<" = "<<forward[idx].first->pos.transpose()<<"\n already in are:\n";
-          for(int q=0; q<fromV.size(); q++) {
-            std::cerr<<fromV[q].transpose()<<std::endl;
-          }
-        }
-        */
-      }
-      this->getTransform(fromV,toV, T);
-
-      //score match;
-      std::map<int,int> inlier_map, reverse_inlier_map;
-      for(auto itr=forward.begin(); itr!=forward.end(); itr++) {
-        double error = (T*itr->first->pos - itr->second->pos).norm();
-        if(error<options.match_tolerance) {
-          inlier_map[itr->first->id] = itr->second->id;
-          reverse_inlier_map[itr->second->id] = itr->first->id;
+          std::cerr<<fromV[q].transpose()<<std::endl;
         }
       }
-      double sc = ((double)inlier_map.size()+reverse_inlier_map.size())/(forward_vertices.size()+reverse_vertices.size());
-      if(sc>score) {
-        std::cerr<<"Found a better transfrom with inlier ratio "<<sc<<std::endl;
-        score=sc;
-        fromTo = T;
+      */
+    }
+    this->getTransform(fromV,toV, T);
 
-        //Try to ICP closer
-        if(options.refine_ICP) {
-          std::cerr<<"Attempting to refine transform ...";
-          fromV.clear(); toV.clear();
-          //get new correspondences
-          for(auto inliers=inlier_map.begin(); inliers!=inlier_map.end(); ++inliers) {
-            FeatureBasePtr f,t;
-            f = from_features[inliers->first]; 
-            t = to_features[inliers->second];
-            if(f!=nullptr && t!=nullptr) {
-              fromV.push_back(f->pos);
-              toV.push_back(t->pos);
-            }
-          }
-          //get new transform
-          if(fromV.size()<3) {
-            std::cerr<<"not enough points\n";
-            continue;
-          }
-          this->getTransform(fromV,toV, T);
+    //score match;
+    std::map<int,int> inlier_map, reverse_inlier_map;
+    for(auto itr=forward.begin(); itr!=forward.end(); itr++) {
+      double error = (T*itr->first->pos - itr->second->pos).norm();
+      if(error<options.match_tolerance) {
+        inlier_map[itr->first->id] = itr->second->id;
+        reverse_inlier_map[itr->second->id] = itr->first->id;
+      }
+    }
+    double sc = ((double)inlier_map.size()+reverse_inlier_map.size())/(forward_vertices.size()+reverse_vertices.size());
+    if(sc>score) {
+      std::cerr<<"Found a better transfrom with inlier ratio "<<sc<<std::endl;
+      score=sc;
+      fromTo = T;
 
-          //score match;
-          std::map<int,int> inlier_map_2, reverse_inlier_map_2;
-          for(auto itr=forward.begin(); itr!=forward.end(); itr++) {
-            double error = (T*itr->first->pos - itr->second->pos).norm();
-            if(error<options.match_tolerance) {
-              inlier_map_2[itr->first->id] = itr->second->id;
-              reverse_inlier_map_2[itr->second->id] = itr->first->id;
-            }
+      //Try to ICP closer
+      if(options.refine_ICP) {
+        std::cerr<<"Attempting to refine transform ...";
+        fromV.clear(); toV.clear();
+        //get new correspondences
+        for(auto inliers=inlier_map.begin(); inliers!=inlier_map.end(); ++inliers) {
+          FeatureBasePtr f,t;
+          f = from_features[inliers->first]; 
+          t = to_features[inliers->second];
+          if(f!=nullptr && t!=nullptr) {
+            fromV.push_back(f->pos);
+            toV.push_back(t->pos);
           }
-          sc = ((double)inlier_map_2.size()+reverse_inlier_map_2.size())/(forward_vertices.size()+reverse_vertices.size());
-          if(sc>score) {
-            std::cerr<<" success, new score is "<<sc<<std::endl;
-            score=sc;
-            fromTo = T;
-          } else {
-            std::cerr<<" fail, new score is "<<sc<<std::endl;
+        }
+        //get new transform
+        if(fromV.size()<3) {
+          std::cerr<<"not enough points\n";
+          continue;
+        }
+        this->getTransform(fromV,toV, T);
+
+        //score match;
+        std::map<int,int> inlier_map_2, reverse_inlier_map_2;
+        for(auto itr=forward.begin(); itr!=forward.end(); itr++) {
+          double error = (T*itr->first->pos - itr->second->pos).norm();
+          if(error<options.match_tolerance) {
+            inlier_map_2[itr->first->id] = itr->second->id;
+            reverse_inlier_map_2[itr->second->id] = itr->first->id;
           }
+        }
+        sc = ((double)inlier_map_2.size()+reverse_inlier_map_2.size())/(forward_vertices.size()+reverse_vertices.size());
+        if(sc>score) {
+          std::cerr<<" success, new score is "<<sc<<std::endl;
+          score=sc;
+          fromTo = T;
+        } else {
+          std::cerr<<" fail, new score is "<<sc<<std::endl;
         }
       }
     }
   }
-  else
-  {
-    std::cerr << "Using TEASER++ for registration" << std::endl;
-    size_t n_points = forward.size();
-    Eigen::Matrix<double, 3, Eigen::Dynamic> fromV(3, n_points), toV(3, n_points);    
-    
-    for(int q=0; q<n_points; q++) {
-      fromV.col(q) = forward[q].first->pos;
-      toV.col(q) = forward[q].second->pos;
-    }
-
-    //TEASER  
-    teaser::Matcher matcher;
-    // Run TEASER++ registration
-    // Prepare solver parameters
-    teaser::RobustRegistrationSolver::Params params;
-    params.noise_bound = 0.05;
-    params.cbar2 = 1;
-    params.estimate_scaling = false;
-    params.rotation_max_iterations = 10000;
-    params.rotation_gnc_factor = 1.4;
-    params.rotation_estimation_algorithm =
-        teaser::RobustRegistrationSolver::ROTATION_ESTIMATION_ALGORITHM::GNC_TLS;
-    params.rotation_cost_threshold = 0.0001;
-
-    // Solve with TEASER++
-    teaser::RobustRegistrationSolver solver(params);
-    solver.solve(fromV, toV);
-    auto solution = solver.getSolution();
-
-    fromTo.linear() = solution.rotation;
-    fromTo.translation() = solution.translation;
-  }
+  
   
   
   for(auto mtr=forward.begin(); mtr!=forward.end(); mtr++) {

@@ -22,9 +22,6 @@
 
 
 #include "omp.h"
-#include <teaser/ply_io.h>
-#include <teaser/registration.h>
-#include <teaser/matcher.h>
 
 #include <pcl/registration/icp.h>
 #include <pcl/registration/transformation_estimation_point_to_plane.h>
@@ -122,63 +119,6 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr convertXYZIToXYZRGB(const pcl::PointCloud
     return cloud_xyzrgb;
 }
 
-void matchPointClouds(pcl::PointCloud<pcl::PointXYZ>::Ptr src, pcl::PointCloud<pcl::PointXYZ>::Ptr tgt, Eigen::Affine3d &T)
-{
-  // TODO: voxel downsample
-
-  // Convert to teaser point cloud  
-  // Assuming you have a point cloud named "cloud"
-  teaser::PointCloud src_cloud;  
-  for (const auto& point : *src) {
-    src_cloud.push_back({static_cast<float>(point.x), static_cast<float>(point.y), static_cast<float>(point.z)});
-  }
-
-  teaser::PointCloud tgt_cloud;
-  for (const auto& point : *tgt) {
-    tgt_cloud.push_back({static_cast<float>(point.x), static_cast<float>(point.y), static_cast<float>(point.z)});
-  }
-
-  // Compute FPFH
-  teaser::FPFHEstimation fpfh;
-  float voxel_size = 0.05;
-  float radius_normal = voxel_size * 2;
-  float radius_feature = voxel_size * 5;
-
-
-  auto obj_descriptors = fpfh.computeFPFHFeatures(src_cloud, radius_normal, radius_feature);
-  auto scene_descriptors = fpfh.computeFPFHFeatures(tgt_cloud, radius_normal, radius_feature);
-
-  teaser::Matcher matcher;
-  auto correspondences = matcher.calculateCorrespondences(
-      src_cloud, tgt_cloud, *obj_descriptors, *scene_descriptors, false, true, false, 0.95);
-
-  // Run TEASER++ registration
-  // Prepare solver parameters
-  float NOISE_BOUND = voxel_size;
-  teaser::RobustRegistrationSolver::Params params;
-  params.noise_bound = NOISE_BOUND;
-  params.cbar2 = 1;
-  params.estimate_scaling = false;
-  params.rotation_max_iterations = 10000;
-  params.rotation_gnc_factor = 1.4;
-  params.rotation_estimation_algorithm =
-      teaser::RobustRegistrationSolver::ROTATION_ESTIMATION_ALGORITHM::GNC_TLS;
-  params.rotation_cost_threshold = 0.0001;
-
-  // Solve with TEASER++
-  teaser::RobustRegistrationSolver solver(params);
-  std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-  solver.solve(src_cloud, tgt_cloud, correspondences);
-  std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-  std::cerr << "TEASER++ took "
-            << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count()/1000.
-            << "ms.\n";
-  auto solution = solver.getSolution();
-
-  
-  T.linear() = solution.rotation;
-  T.translation() = solution.translation;
-}
 
 graph_matcher::DescriptorExtractPtr getExtractor(std::shared_ptr<graph_matcher::CloudRenderer> & rend,
                                                   cv::Mat &intensity, 
@@ -215,21 +155,6 @@ graph_matcher::DescriptorExtractPtr getExtractor(std::shared_ptr<graph_matcher::
   return extractor;
 }
 
-void teaserRegistration(graph_matcher::DescriptorExtractPtr extractor_first,
-                        graph_matcher::DescriptorExtractPtr extractor_second,
-                        pcl::PointCloud<pcl::PointXYZ>::Ptr &bolts_1,
-                        pcl::PointCloud<pcl::PointXYZ>::Ptr &bolts_2,
-                        Eigen::Affine3d &reg)
-{
-      std::shared_ptr<graph_matcher::PCLExtract> pcl_extractor_first = std::dynamic_pointer_cast<graph_matcher::PCLExtract>(extractor_first);
-      std::shared_ptr<graph_matcher::PCLExtract> pcl_extractor_second = std::dynamic_pointer_cast<graph_matcher::PCLExtract>(extractor_second);
-      pcl_extractor_first->getBolts(bolts_1);
-      pcl_extractor_second->getBolts(bolts_2);
-      // pcl::io::savePCDFile("cloud_bolts_1.pcd", *bolts_1);
-      // pcl::io::savePCDFile("cloud_bolts_2.pcd", *bolts_2);
-
-      matchPointClouds(bolts_1, bolts_2, reg);
- }
 
 void matchGraphs(graph_matcher::GraphBuilder &gb,
                              graph_matcher::FeatureGraphPtr &graph,
@@ -368,8 +293,7 @@ int main(int argc, char **argv)
   ("coffset_yaw", po::value<double>(&coffset_yaw)->default_value(0), "Z initial position of camera")
   ("pos_file_1", po::value<std::string>(&pos_file_1), "name of the scan_1 pos file to read") 	
   ("pos_file_2", po::value<std::string>(&pos_file_2), "name of the scan_2 pos file to read") 	
-  ("bolts_fpfh", "use FPFH features for points around bolts") // directly apply TEASER on the point cloud to detect bolts
-  ("reg_type", po::value<std::string>(&reg_type)->default_value("RANSAC"), "registration type; RANSAC,TEASER, or Quatro")
+  ("reg_type", po::value<std::string>(&reg_type)->default_value("RANSAC"), "registration type; RANSAC")
   ("load_features", po::value<std::string>(&feature_file), "load features from file")
   ("log_file_name", po::value<std::string>(&log_file), "log file name")
   ("save_graph", "save the graph to a file")
@@ -386,7 +310,6 @@ int main(int argc, char **argv)
   bool batch_test = vm.count("batch-test");
   bool load2ndPoints = vm.count("input_2");
   bool connect_pts = false;
-  bool TEASER_bolts = vm.count("bolts_fpfh");
   bool isLoadingFeatures = vm.count("load_features");
   bool save_graph = vm.count("save_graph");
   bool show_img = vm.count("show_img");
@@ -404,10 +327,7 @@ int main(int argc, char **argv)
   if (save_graph) {
     std::cout << "Saving the graph to a file\n";    
   }
-  if(TEASER_bolts) {
-    std::cout << "Using FPFH features for detected bolts points\n";
-    feature_type = "FPFH";
-  }
+
 
   if(load2ndPoints && vm.count("connect_pts")) {
     connect_pts = true;
@@ -517,9 +437,7 @@ int main(int argc, char **argv)
     useLabel_2 = true;
   }
 
-  if (reg_type != "RANSAC" &&
-      reg_type != "TEASER" &&
-      reg_type != "Quatro")
+  if (reg_type != "RANSAC")
   {
     std::cerr << "Unkonw registration type specified. Choose one of the implemented\n";
     return -1;
@@ -885,9 +803,7 @@ int main(int argc, char **argv)
     drawKeypoints(vis_converted, keypoints);
   }
   graph_matcher::DescriptorExtractPtr extractor_first;
-  // fix me:
-  // extractor_first = getExtractor(rend, intensity, depth, feature_type, TEASER_bolts);  
-  extractor_first = getExtractor(rend, intensity, depth, feature_type, save_graph, input_1_name);  
+  extractor_first = getExtractor(rend, intensity, depth, feature_type);  
 
 
   auto end_detection_1 = std::chrono::high_resolution_clock::now();
@@ -993,31 +909,23 @@ int main(int argc, char **argv)
           }
 
           graph_matcher::DescriptorExtractPtr extractor_second;          
-          extractor_second = getExtractor(rend, intensity, depth, feature_type, TEASER_bolts);
+          extractor_second = getExtractor(rend, intensity, depth, feature_type);
 
           auto graph_second = gb.buildGraph(depth, keypoints_second, extractor_second);
 
           //------------------ now match the two ------------------//
           Eigen::Affine3d reg;
           std::vector<std::pair<int, int>> matches;
-          if (TEASER_bolts) {
-            teaserRegistration(extractor_first,
-                                extractor_second,
-                                bolts_1,
-                                bolts_2,
-                                reg);
-          }
-          else
-          {
-            matchGraphs(gb,
-                        graph,
-                        graph_second,
-                        options,
-                        feature_type,
-                        do_connectivity,
-                        matches,
-                        reg);      
-          }
+          
+          matchGraphs(gb,
+                      graph,
+                      graph_second,
+                      options,
+                      feature_type,
+                      do_connectivity,
+                      matches,
+                      reg);      
+        
          
           auto reg_orig = deltaT * reg;
           std::cerr << "Got transform (first to second):\n" << reg.matrix() << std::endl;  
@@ -1124,9 +1032,7 @@ int main(int argc, char **argv)
     }      
 
     graph_matcher::DescriptorExtractPtr extractor_second;    
-    // fix me:
-    // extractor_second = getExtractor(rend, intensity, depth, feature_type, TEASER_bolts);
-    extractor_second = getExtractor(rend, intensity, depth, feature_type, save_graph, input_2_name);
+    extractor_second = getExtractor(rend, intensity, depth, feature_type);
 
     std::chrono::duration<double> detection_time_2 = std::chrono::high_resolution_clock::now() - start_time_detection_2;
     std::cerr << "Detection time 2: " << detection_time_2 .count() << " seconds\n";
@@ -1159,15 +1065,7 @@ int main(int argc, char **argv)
     //------------------ now match the two ------------------//
     Eigen::Affine3d reg;
     std::vector<std::pair<int, int>> matches;
-    if (TEASER_bolts) {
-      teaserRegistration(extractor_first,
-                          extractor_second,
-                          bolts_1,
-                          bolts_2,
-                          reg);
-    }
-    else
-    {
+   
       matchGraphs(gb,
                   graph,
                   graph_second,
@@ -1176,7 +1074,7 @@ int main(int argc, char **argv)
                   do_connectivity,
                   matches,
                   reg);      
-    }
+    
 
     auto end_time_registration = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> registration_time = end_time_registration - end_time_detection;

@@ -74,7 +74,7 @@ static uint8_t FEATURE_GRAPH_FILE_FORMAT_MINOR_VERSION=1;
 
     float random_seed;
 
-    // fix me: change RANSAC_options to another name. we can use RANSAC or TEASER
+    // fix me: change RANSAC_options to another name. we can use RANSAC
     bool use_RANSAC;
   };
 

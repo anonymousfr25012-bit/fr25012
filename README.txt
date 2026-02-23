@@ -1,5 +1,3 @@
-## will make sure code is anonymous before uploading, before Feb 23;
-
 ## Docker is available
 
 A Dockerfile is available in the folder container. (make sure you have space available which is larger than 32G)
@@ -29,7 +27,7 @@ mkdir build
 cd build
 cp CMakeLists.txt CMakeLists.txt.bak
 mv CMakeLists_docker.txt CMakeLists.txt
-cmake ..   # cmake -DUSE_CUDA=OFF   if you don't have CUDA
+cmake ..  
 make -j8
 ```
 An test example:

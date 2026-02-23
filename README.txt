@@ -29,25 +29,24 @@ cp CMakeLists.txt CMakeLists.txt.bak
 mv CMakeLists_docker.txt CMakeLists.txt
 cmake ..  
 make -j8
+
 ```
-An test example:
-```
-./testLibTorch --cpu --model ../models/my_module_model_new.pt --input_depth ../data/test/DepthImages/155_depth_0.png --input_intensity ../data/test/IntensityImages/155_intensity_0.png 
-```
-To test libtorch with cuda version, remove --cpu or change --cpu to --gpu
+
+Model and test data:
+model: https://drive.google.com/drive/folders/1zWE2_VW2Dwd2bMmDApECs3VcoYkRMuAX?usp=sharing
+data: https://drive.google.com/drive/folders/1cv13ecYayLxoHtXydVrYA3NmEjnK5kew?usp=sharing
+
+Put the xxx.pt file into models and data files into data folder.
 
 
 Match example:
 ```
-./matcher --cpu --input ../data/pcd-153.pcd --model ../models/my_module_model_new.pt --feature PFH  --cam_z -235 --cam_x 1 --cam_y 1 --ransac_n_closest             
+cd build
+../scripts/test_command.sh
 
 ```
-If torchvision is build without -DWITH_CUDA=ON, matcher has to run with argument --cpu if you want to use learned detector. Otherwise, the code will decide to run with cuda or not itself. If cuda is available on your machine but torchvision is compile without cuda, then it will be a problem.
 
 
-```
-./matcher  --input ../data/simulation_scan/with_intensity/28_-2_-12.pcd --input_2 ../data/simulation_scan/with_intensity/27_-2_-18.pcd --model ../models/new_bolts/custom_faster_rcnn_chkpt_49.pt --fisheye --feature PFH  --cam_z 0 --cam_x 0 --cam_y 0 --coffset_x 0 --coffset_y 0 --coffset_z 0 --cam_x_gt -1 --cam_y_gt 6 --cam_z_gt 0 --ransac_n_closest --ransac_forward_reverse --connect_pts
-```
 This command will try to match two point clouds, stitch them, and save them. In the stitched point cloud, they are in two different colors.
 
 
@@ -60,8 +59,6 @@ cmake -DCMAKE_PREFIX_PATH=/path/to/libtorch ..
 cmake --build . --config Release
 ```
 
-if you don't have cuda or gpu on your machine, use this link:
-https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.1.1%2Bcpu.zip
 
 ## Build torchvision
 https://github.com/pytorch/vision#using-the-models-on-c
@@ -80,28 +77,7 @@ make install
 ## Build TEASER
 https://github.com/MIT-SPARK/TEASER-plusplus.git
 
-```
-git clone https://github.com/MIT-SPARK/TEASER-plusplus.git
-cd TEASER-plusplus && mkdir build && cd build
-cmake .. && make
-sudo make install
-sudo ldconfig
-cd .. && cd examples/teaser_cpp_ply && mkdir build && cd build
-cmake .. && make
-./teaser_cpp_ply
-```
-In CMakeList.txt
-```
-find_package(teaserpp REQUIRED)
 
-target_link_libraries(xxx 
-...
-teaserpp::teaser_registration 
-teaserpp::teaser_features
-...)
-
-
-```
 ## Build excutables
 ```
 mkdir build
@@ -113,10 +89,7 @@ make -j8
 ## pretrained model and test data
 find the test data and model here: 
 
-## Test
-```
-./testLibTorch ../models/my_module_model_new.pt ../data/test/DepthImages/155_depth_0.png ../data/test/IntensityImages/155_intensity_0.png 
-```
+
 
 
 ##  FAQ

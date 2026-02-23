@@ -1178,11 +1178,6 @@ int main(int argc, char **argv)
         }
         cloud.swap(filtered);
       };
-      // removeCylinder(cloud_downsampled, 12.0f, true);
-      // removeCylinder(cloud_2_downsampled, 12.0f, false);
-      
-      std::cerr << "removeCylinder cloud size: " << cloud_downsampled->size() << std::endl;
-      std::cerr << "removeCylinder cloud_2 size: " << cloud_2_downsampled->size() << std::endl;
 
       // Estimate normals for target cloud
       pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
@@ -1203,25 +1198,19 @@ int main(int argc, char **argv)
 
       // for icp p2p, we can just use the downsampled cloud without normals
       
-      // pcl::IterativeClosestPoint<PointNormalT, PointNormalT> icp;
-      // pcl::PointCloud<PointNormalT> Final;
-      // icp.setInputSource(cloud_in_with_normals);
-      // icp.setInputTarget(cloud_out_with_normals);          
+      pcl::IterativeClosestPoint<PointNormalT, PointNormalT> icp;
+      pcl::PointCloud<PointNormalT> Final;
+      icp.setInputSource(cloud_in_with_normals);
+      icp.setInputTarget(cloud_out_with_normals);          
       
-      
-      pcl::IterativeClosestPoint<pcl::PointXYZRGB, pcl::PointXYZRGB> icp;
-      pcl::PointCloud<pcl::PointXYZRGB> Final;
-      icp.setInputSource(cloud_downsampled);
-      icp.setInputTarget(cloud_2_downsampled);              
-
-      // icp.setMaximumIterations(5000);
+  
       icp.setMaximumIterations(50);
       icp.setMaxCorrespondenceDistance(1.5*grid_size);
       icp.setTransformationEpsilon(1e-8);
       icp.setEuclideanFitnessEpsilon(1e-8);
       icp.setUseReciprocalCorrespondences(true);
-      // icp.setTransformationEstimation(
-      //   pcl::make_shared<pcl::registration::TransformationEstimationPointToPlane<PointNormalT, PointNormalT>>());
+      icp.setTransformationEstimation(
+        pcl::make_shared<pcl::registration::TransformationEstimationPointToPlane<PointNormalT, PointNormalT>>());
       icp.align(Final);
       
       auto end_time_icp = std::chrono::high_resolution_clock::now();
@@ -1294,12 +1283,15 @@ int main(int argc, char **argv)
       *cloud_combined = *cloud_2 + *cloud_1_transformed;
       *cloud_combined_gt = *cloud_2 + *cloud_1_transformed_gt;
 
-      if (pcl::io::savePCDFileBinary("cloud_combined_gt.pcd", *cloud_combined_gt) == -1)
+      std::string cloud_gt_file_name = "("+input_2_name+")_("+input_1_name + ")_gt.pcd";
+      std::string cloud_reg_file_name = "("+input_2_name+")_("+input_1_name + ").pcd";
+
+      if (pcl::io::savePCDFileBinary(cloud_gt_file_name, *cloud_combined_gt) == -1)
       {
           PCL_ERROR("Couldn't save file cloud_combined_gt.pcd \n");
           return (-1);
       }
-      if (pcl::io::savePCDFileBinary("cloud_combined.pcd", *cloud_combined) == -1)
+      if (pcl::io::savePCDFileBinary(cloud_reg_file_name, *cloud_combined) == -1)
       {
           PCL_ERROR("Couldn't save file cloud_combined.pcd \n");
           return (-1);

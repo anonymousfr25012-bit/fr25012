@@ -7,7 +7,7 @@ DATA_DIR_1="../data/"
 MODEL="../models/test_model.pt"
 
 
-COMMON_ARGS="--fisheye --feature FPFH --cam_z -0 --cam_x 0 --cam_y 0 --coffset_x 0 --coffset_y 0 --coffset_z 0 --coffset_yaw 0 --cam_x_gt 0 --cam_y_gt 0 --cam_z_gt 0 --ransac_n_closest --ransac_forward_reverse --pt_type XYZRGB --icp_refine --masking_distance -1"
+COMMON_ARGS="--fisheye --feature FPFH --cam_z -0 --cam_x 0 --cam_y 0 --coffset_x 0 --coffset_y 0 --coffset_z 0 --coffset_yaw 0 --cam_x_gt 0 --cam_y_gt 0 --cam_z_gt 0 --ransac_n_closest --ransac_forward_reverse --pt_type XYZRGB --icp_refine --masking_distance -1 --connect_pts"
 
 # Function to run matcher
 run_matcher_1() {
